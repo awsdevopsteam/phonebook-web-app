@@ -26,12 +26,13 @@ Parameters:
   myVPC:
     Description: choose your vpc
     Type: AWS::EC2::VPC::Id
-  
+
   myDbname: 
     Type: AWS::SSM::Parameter::Value<String>
     Default: /clarusway/phonebook/dbname
-
+  
 Resources:
+
 
   ASG:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -57,6 +58,16 @@ Resources:
       LoadBalancerArn: !Ref ALB # Required
       Port: 80 # Required
       Protocol: HTTP  # Required
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4 
+      Scheme: internet-facing
+      SecurityGroups:
+        - !GetAtt aLBSecGrp.GroupId
+      Subnets: !Ref Subnets
+      Type: application
 
   LT:
     Type: AWS::EC2::LaunchTemplate
@@ -110,6 +121,7 @@ Resources:
       InstanceProfileName: osvaldo-phonebook-19-ip
       Roles: # Required
         - !Ref mySSMRole
+
   mySSMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -127,13 +139,15 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
       RoleName: osvaldo-SSM-phonebook-19
 
+
+
   rDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: 20
       BackupRetentionPeriod: 0
       DBInstanceClass: db.t3.micro
-      DBInstanceIdentifier: osvaldo-phoenebook-19
+      DBInstanceIdentifier: osvaldo-phonebook-19
       DBName: !Ref myDbname # '{{resolve:ssm:/clarusway/phonebook/dbname:1}}'
       DBSecurityGroups: 
         - !Ref rDSSecGrp
@@ -142,8 +156,6 @@ Resources:
       EngineVersion: 8.0.35
       MasterUserPassword: '{{resolve:ssm-secure:/clarusway/phonebook/password:1}}'
       MasterUsername: '{{resolve:ssm:/clarusway/phonebook/username:1}}'
-      MultiAZ: false
-      Port: 3306
       PubliclyAccessible: true
     DeletionPolicy: Delete
 
@@ -151,50 +163,48 @@ Resources:
     Type: AWS::RDS::DBSecurityGroup
     Properties:
       DBSecurityGroupIngress: # Required
-        - EC2SecurityGroupId: !GetAtt  eC2SecGrp.GroupId
+        - EC2SecurityGroupId: !GetAtt eC2SecGrp.GroupId
       GroupDescription: allow 3306 from ec2secgrp # Required
       Tags: 
         - Key: Name
-          Value: oss-aldo-phonebook-secgrp-19
+          Value: osvaldo-phonebook-RDS-Sec-19
 
   eC2SecGrp:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: allow ssh from anywhere and http from alb # Required
-      GroupName: osvaldo-pheonebook-ec2-secgrp-19
+      GroupDescription: allow ssh from anywhere and http from ALB # Required
+      GroupName: osvaldo-phonebook-EC2-19
       SecurityGroupIngress: 
-        - SourceSecurityGroupId: !GetAtt aLBSecGrp.GroupId # !Ref aLBSecGrp
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
+
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt aLBSecGrp.GroupId  # !Ref aLBSecGrp
       VpcId: !Ref myVPC
 
   aLBSecGrp:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow ssh and http # Required
-      GroupName: osvaldo-phonebook-alb-secgrp-19
+      GroupName: osvaldo-phonebook-ALB-19
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
       VpcId: !Ref myVPC
-
+    
 Outputs:
   WebsiteURL:
     Value: !Sub 
       - http://${ALBAddress}
       - ALBAddress: !GetAtt ALB.DNSName
     Description: Phonebook Application Load Balancer URL
-  
